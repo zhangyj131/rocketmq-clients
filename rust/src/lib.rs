@@ -24,3 +24,10 @@ mod command;
 mod client;
 
 mod producer;
+
+mod message;
+
+mod util;
+
+pub use crate::message::Message;
+pub use crate::producer::{Producer, ProducerBuilder, SendReceipt};

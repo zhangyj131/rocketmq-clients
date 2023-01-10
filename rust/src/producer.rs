@@ -14,28 +14,79 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use slog::Logger;
+use slog::{o, Discard, Logger};
 
-use crate::{client, error};
+use crate::{
+    client::{self, Client},
+    error::ClientError,
+    message::Message,
+};
 
-struct Producer {
+pub struct ProducerBuilder {
+    target: String,
+    log: Logger,
+}
+
+impl ProducerBuilder {
+    pub fn new(target: &str) -> Self {
+        let drain = Discard;
+        let root = Logger::root(drain, o!());
+        Self {
+            target: target.to_owned(),
+            log: root,
+        }
+    }
+
+    pub fn set_log(mut self, log: Logger) -> Self {
+        self.log = log;
+        self
+    }
+
+    pub fn build(self) -> Result<Producer, ClientError> {
+        let client = Client::new(self.log, &self.target)?;
+        Ok(Producer { client })
+    }
+}
+
+pub struct Producer {
     client: client::Client,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum SendReceipt {
+    Success { message_id: String },
+    Failure { cause: String, target_host: String },
+}
+
 impl Producer {
-    pub async fn new<T>(logger: Logger, topics: T) -> Result<Self, error::ClientError>
-    where
-        T: IntoIterator,
-        T::Item: AsRef<str>,
-    {
-        let access_point = "localhost:8081";
-        let client = client::Client::new(logger, access_point)?;
-        for _topic in topics.into_iter() {
-            // client.subscribe(topic.as_ref()).await;
-        }
-
-        Ok(Producer { client })
+    pub async fn send(&mut self, message: Message) -> Result<SendReceipt, ClientError> {
+        Ok(SendReceipt::Success {
+            message_id: String::from("abc"),
+        })
     }
+}
 
-    pub fn start(&mut self) {}
+#[cfg(test)]
+mod tests {
+
+    use crate::{message, util};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_builder() -> Result<(), ClientError> {
+        let target = "localhost:9876";
+        let log = util::terminal_logger();
+        let mut producer = ProducerBuilder::new(target).set_log(log).build()?;
+
+        let message = message::Message {};
+        let send_receipt = producer.send(message).await?;
+        assert_eq!(
+            SendReceipt::Success {
+                message_id: "abc".to_owned(),
+            },
+            send_receipt
+        );
+        Ok(())
+    }
 }
